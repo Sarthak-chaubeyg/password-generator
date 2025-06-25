@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <!-- Content Security Policy allowing required CDNs, including font-src for icon fonts -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net 'unsafe-inline';
+        style-src 'self' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline';
+        img-src 'self' data:;
+        font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+        connect-src 'none';
+        object-src 'none';
+        frame-ancestors 'none';
+        base-uri 'self';
+    ">
+    <title>Unbreakable Password Generator</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Remix Icons CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon/fonts/remixicon.css" rel="stylesheet">
+    <!-- zxcvbn for strength evaluation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" crossorigin="anonymous"></script>
+    
+    <style>
+        /* Dark mode and animations */
+        .dark {
+            --tw-bg-opacity: 1;
+            background-color: rgb(17 24 39 / var(--tw-bg-opacity));
+            color: rgb(243 244 246);
+        }
+        .strength-bar {
+            transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;
+        }
+        .toast {
+            animation: slideInRight 0.3s ease-out;
+        }
+        .toast.fade-out {
+            animation: slideOutRight 0.3s ease-in;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        .password-item {
+            animation: fadeInUp 0.3s ease-out;
+        }
+        @keyframes fadeInUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .btn-hover {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-hover:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .dark .btn-hover:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* Strength bar colors */
+        .strength-very-weak { background-color: #dc2626; }
+        .strength-weak { background-color: #ea580c; }
+        .strength-normal { background-color: #ca8a04; }
+        .strength-strong { background-color: #16a34a; }
+        .strength-very-strong { background-color: #059669; }
+        .strength-super-strong { background-color: #0d9488; }
+        /* Range slider styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-track {
+            background: #d1d5db;
+            height: 8px;
+            border-radius: 4px;
+        }
+        .dark input[type="range"]::-webkit-slider-track {
+            background: #374151;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        input[type="range"]::-moz-range-track {
+            background: #d1d5db;
+            height: 8px;
+            border-radius: 4px;
+            border: none;
+        }
+        .dark input[type="range"]::-moz-range-track {
+            background: #374151;
+        }
+        input[type="range"]::-moz-range-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Header -->
+    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                <i class="ri-shield-check-line text-blue-600 dark:text-blue-400 mr-2 text-3xl"></i>
+                Unbreakable Password Generator
+            </h1>
+            <button id="theme-toggle" class="btn-hover p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" aria-label="Toggle dark mode">
+                <i class="ri-moon-line dark:hidden text-xl"></i>
+                <i class="ri-sun-line hidden dark:inline text-xl"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-4 py-8">
+        <!-- Security Notice -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+            <div class="flex items-start">
+                <i class="ri-information-line text-blue-600 dark:text-blue-400 mt-1 mr-3 text-xl"></i>
+                <div class="text-sm text-blue-800 dark:text-blue-200">
+                    <p class="font-semibold mb-1">Security Notice</p>
+                    <p>All operations are client-side; passwords are never sent to any server. Use only on trusted devices; downloaded files are stored on your device—manage them securely. This tool runs entirely client-side and can be inspected/modified by users or attackers on compromised machines.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="ri-settings-3-line mr-2 text-xl"></i>
+                Password Settings
+            </h2>
+            
+            <!-- Length Slider -->
+            <div class="mb-6">
+                <label for="length-slider" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Password Length: <span id="length-display" class="font-mono text-blue-600 dark:text-blue-400 font-bold">16</span>
+                </label>
+                <input type="range" id="length-slider" min="4" max="100" value="16" step="1" 
+                       class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
+            </div>
+
+            <!-- Count Input -->
+            <div class="mb-6">
+                <label for="count-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <i class="ri-hash-tag mr-1"></i>
+                    Number of Passwords
+                </label>
+                <input type="number" id="count-input" min="1" max="500" value="5" 
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+
+            <!-- Character Set Toggles -->
+            <div class="mb-6">
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <i class="ri-text mr-1"></i>
+                    Character Sets
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <input type="checkbox" id="uppercase" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4">
+                        <i class="ri-font-size-2 text-gray-500"></i>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Uppercase (A-Z)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <input type="checkbox" id="lowercase" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4">
+                        <i class="ri-font-size text-gray-500"></i>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Lowercase (a-z)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <input type="checkbox" id="digits" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4">
+                        <i class="ri-hashtag text-gray-500"></i>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Digits (0-9)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <input type="checkbox" id="symbols" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4">
+                        <i class="ri-at-line text-gray-500"></i>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Symbols (!@#$...)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Validation Messages -->
+            <div id="validation-messages" class="mb-4 hidden">
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                    <div class="flex items-center">
+                        <i class="ri-error-warning-line text-red-600 dark:text-red-400 mr-2 text-xl"></i>
+                        <span id="validation-text" class="text-sm text-red-800 dark:text-red-200"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <button id="generate-btn" class="btn-hover w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center">
+                <i id="generate-icon" class="ri-key-2-line mr-2 text-xl"></i>
+                <span id="generate-text">Generate Passwords</span>
+            </button>
+        </div>
+
+        <!-- Saved List Controls -->
+        <div id="saved-controls" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6 hidden">
+            <div class="flex flex-wrap gap-3 items-center">
+                <button id="download-all-btn" class="btn-hover bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center" disabled>
+                    <i class="ri-download-line mr-2"></i>
+                    Download All Saved as TXT
+                </button>
+                <button id="clear-saved-btn" class="btn-hover bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center">
+                    <i class="ri-delete-bin-line mr-2"></i>
+                    Clear Saved List
+                </button>
+                <span id="saved-count" class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                    <i class="ri-star-fill text-yellow-500 mr-1"></i>
+                    0 saved
+                </span>
+            </div>
+        </div>
+
+        <!-- Generated Passwords Container -->
+        <div id="passwords-container" class="hidden">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="ri-lock-password-line mr-2 text-xl"></i>
+                Generated Passwords
+            </h3>
+            <div id="passwords-list" class="space-y-3"></div>
+        </div>
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container" aria-live="polite" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+    <script>
+        'use strict';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check for required APIs
+            if (!window.crypto || !window.crypto.getRandomValues) {
+                showToast('Your browser does not support secure random generation. Please use a modern browser.', { type: 'error', persistent: true });
+                return;
+            }
+            
+            // DOM Elements
+            const lengthSlider = document.getElementById('length-slider');
+            const lengthDisplay = document.getElementById('length-display');
+            const countInput = document.getElementById('count-input');
+            const uppercaseCheck = document.getElementById('uppercase');
+            const lowercaseCheck = document.getElementById('lowercase');
+            const digitsCheck = document.getElementById('digits');
+            const symbolsCheck = document.getElementById('symbols');
+            const generateBtn = document.getElementById('generate-btn');
+            const generateIcon = document.getElementById('generate-icon');
+            const generateText = document.getElementById('generate-text');
+            const validationMessages = document.getElementById('validation-messages');
+            const validationText = document.getElementById('validation-text');
+            const passwordsContainer = document.getElementById('passwords-container');
+            const passwordsList = document.getElementById('passwords-list');
+            const savedControls = document.getElementById('saved-controls');
+            const downloadAllBtn = document.getElementById('download-all-btn');
+            const clearSavedBtn = document.getElementById('clear-saved-btn');
+            const savedCount = document.getElementById('saved-count');
+            const themeToggle = document.getElementById('theme-toggle');
+            
+            // State
+            let savedPasswords = [];
+            let isGenerating = false;
+            
+            // Character sets
+            const charsets = {
+                uppercase: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                lowercase: 'abcdefghijklmnopqrstuvwxyz',
+                digits: '0123456789',
+                symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?'
+            };
+            
+            // Secure random password generation using crypto.getRandomValues
+            function generatePassword(length, charset) {
+                if (!charset || charset.length === 0) {
+                    throw new Error('Empty charset');
+                }
+                
+                const array = new Uint32Array(length);
+                window.crypto.getRandomValues(array);
+                
+                let password = '';
+                for (let i = 0; i < length; i++) {
+                    password += charset[array[i] % charset.length];
+                }
+                
+                return password;
+            }
+            
+            // Password strength evaluation using zxcvbn
+            function evaluateStrength(password) {
+                if (typeof zxcvbn === 'undefined') {
+                    return { category: 'N/A', score: 0, color: 'gray' };
+                }
+                
+                try {
+                    const result = zxcvbn(password);
+                    const score = result.score;
+                    const length = password.length;
+                    
+                    let category, color;
+                    if (score === 0) {
+                        category = 'Very Weak';
+                        color = 'strength-very-weak';
+                    } else if (score === 1) {
+                        category = 'Weak';
+                        color = 'strength-weak';
+                    } else if (score === 2) {
+                        category = 'Normal';
+                        color = 'strength-normal';
+                    } else if (score === 3) {
+                        category = 'Strong';
+                        color = 'strength-strong';
+                    } else if (score === 4 && length >= 20) {
+                        category = 'Super Maximum Strong';
+                        color = 'strength-super-strong';
+                    } else {
+                        category = 'Very Strong';
+                        color = 'strength-very-strong';
+                    }
+                    
+                    return { category, score: Math.min(100, (score + 1) * 20), color };
+                } catch (error) {
+                    console.error('zxcvbn evaluation failed:', error);
+                    return { category: 'N/A', score: 0, color: 'gray' };
+                }
+            }
+            
+            // Copy to clipboard using modern Clipboard API
+            async function copyToClipboard(text) {
+                if (!navigator.clipboard) {
+                    showToast('Copy feature not supported in this browser.', { type: 'error' });
+                    return false;
+                }
+                
+                try {
+                    await navigator.clipboard.writeText(text);
+                    showToast('Password copied to clipboard', { type: 'success' });
+                    return true;
+                } catch (error) {
+                    console.error('Clipboard write failed:', error);
+                    showToast('Failed to copy to clipboard', { type: 'error' });
+                    return false;
+                }
+            }
+            
+            // Download single password as TXT file
+            function downloadTxtSingle(password) {
+                try {
+                    const content = `Generated Password\n==================\n\nPassword: ${password}\nGenerated on: ${new Date().toLocaleString()}\nLength: ${password.length} characters\n\nSecurity Notice:\nStore this password securely and delete this file when no longer needed.\nThis password was generated client-side using cryptographically secure random generation.`;
+                    
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    const filename = `password_${timestamp}.txt`;
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showToast('Password file downloaded successfully', { type: 'success' });
+                } catch (error) {
+                    console.error('TXT generation failed:', error);
+                    showToast('File download failed', { type: 'error' });
+                }
+            }
+            
+            // Download all saved passwords as TXT file
+            function downloadTxtBulk(passwords) {
+                try {
+                    let content = `Saved Passwords\n===============\n\nGenerated on: ${new Date().toLocaleString()}\nTotal passwords: ${passwords.length}\n\n`;
+                    
+                    passwords.forEach((password, index) => {
+                        content += `${index + 1}. ${password}\n`;
+                    });
+                    
+                    content += `\nSecurity Notice:\nStore these passwords securely and delete this file when no longer needed.\nThese passwords were generated client-side using cryptographically secure random generation.`;
+                    
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    const filename = `saved_passwords_${timestamp}.txt`;
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showToast(`TXT file with ${passwords.length} passwords downloaded`, { type: 'success' });
+                } catch (error) {
+                    console.error('Bulk TXT generation failed:', error);
+                    showToast('File download failed', { type: 'error' });
+                }
+            }
+            
+            // Show toast notification with animation
+            function showToast(message, options = {}) {
+                const { type = 'info', persistent = false } = options;
+                const toastContainer = document.getElementById('toast-container');
+                
+                const toast = document.createElement('div');
+                toast.className = `toast bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-sm`;
+                
+                const iconMap = {
+                    success: 'ri-check-line text-green-500',
+                    error: 'ri-error-warning-line text-red-500',
+                    warning: 'ri-alert-line text-yellow-500',
+                    info: 'ri-information-line text-blue-500'
+                };
+                
+                toast.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="${iconMap[type]} mr-3 text-xl"></i>
+                        <span class="text-sm text-gray-900 dark:text-white">${message}</span>
+                    </div>
+                `;
+                
+                toastContainer.appendChild(toast);
+                
+                if (!persistent) {
+                    setTimeout(() => {
+                        toast.classList.add('fade-out');
+                        setTimeout(() => {
+                            if (toast.parentNode) {
+                                toast.parentNode.removeChild(toast);
+                            }
+                        }, 300);
+                    }, 3000);
+                }
+            }
+            
+            // Clear saved passwords list
+            function clearSavedList() {
+                savedPasswords.length = 0;
+                updateSavedControls();
+                showToast('Saved passwords cleared from memory', { type: 'info' });
+                
+                // Update UI to reflect cleared state
+                const starButtons = document.querySelectorAll('.star-btn');
+                starButtons.forEach(btn => {
+                    btn.innerHTML = '<i class="ri-star-line text-xl"></i>';
+                    btn.classList.remove('text-yellow-500');
+                    btn.classList.add('text-gray-400');
+                });
+            }
+            
+            // Update saved controls visibility and state
+            function updateSavedControls() {
+                const hasSaved = savedPasswords.length > 0;
+                savedControls.classList.toggle('hidden', !hasSaved);
+                downloadAllBtn.disabled = !hasSaved;
+                savedCount.innerHTML = `<i class="ri-star-fill text-yellow-500 mr-1"></i>${savedPasswords.length} saved`;
+            }
+            
+            // Validate inputs
+            function validateInputs() {
+                const length = parseInt(lengthSlider.value);
+                const count = parseInt(countInput.value);
+                const hasCharset = uppercaseCheck.checked || lowercaseCheck.checked || 
+                                 digitsCheck.checked || symbolsCheck.checked;
+                
+                let isValid = true;
+                let message = '';
+                
+                if (!hasCharset) {
+                    isValid = false;
+                    message = 'Select at least one character set.';
+                } else if (count < 1 || count > 500) {
+                    isValid = false;
+                    message = 'Number of passwords must be between 1 and 500.';
+                } else if (length < 4 || length > 100) {
+                    isValid = false;
+                    message = 'Password length must be between 4 and 100.';
+                } else if (count * length > 50000) {
+                    isValid = false;
+                    message = 'Total character count too large. Reduce count or length to prevent browser slowdown.';
+                }
+                
+                if (isValid) {
+                    validationMessages.classList.add('hidden');
+                } else {
+                    validationText.textContent = message;
+                    validationMessages.classList.remove('hidden');
+                }
+                
+                generateBtn.disabled = !isValid || isGenerating;
+                return isValid;
+            }
+            
+            // Generate passwords
+            async function generatePasswords() {
+                if (!validateInputs() || isGenerating) return;
+                
+                isGenerating = true;
+                generateBtn.disabled = true;
+                generateIcon.className = 'ri-loader-4-line spinner mr-2 text-xl';
+                generateText.textContent = 'Generating...';
+                
+                try {
+                    const length = parseInt(lengthSlider.value);
+                    const count = parseInt(countInput.value);
+                    
+                    // Build charset
+                    let charset = '';
+                    if (uppercaseCheck.checked) charset += charsets.uppercase;
+                    if (lowercaseCheck.checked) charset += charsets.lowercase;
+                    if (digitsCheck.checked) charset += charsets.digits;
+                    if (symbolsCheck.checked) charset += charsets.symbols;
+                    
+                    // Generate passwords
+                    const passwords = [];
+                    for (let i = 0; i < count; i++) {
+                        passwords.push(generatePassword(length, charset));
+                    }
+                    
+                    // Display passwords
+                    displayPasswords(passwords);
+                    
+                    showToast(`Generated ${count} password${count > 1 ? 's' : ''}`, { type: 'success' });
+                } catch (error) {
+                    console.error('Password generation failed:', error);
+                    showToast('Password generation failed', { type: 'error' });
+                } finally {
+                    isGenerating = false;
+                    generateBtn.disabled = false;
+                    generateIcon.className = 'ri-key-2-line mr-2 text-xl';
+                    generateText.textContent = 'Generate Passwords';
+                }
+            }
+            
+            // Display generated passwords
+            function displayPasswords(passwords) {
+                passwordsList.innerHTML = '';
+                
+                passwords.forEach((password, index) => {
+                    const passwordItem = document.createElement('div');
+                    passwordItem.className = 'password-item bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600';
+                    
+                    const strength = evaluateStrength(password);
+                    
+                    passwordItem.innerHTML = `
+                        <div class="flex items-center justify-between mb-3">
+                            <code class="text-sm font-mono bg-white dark:bg-gray-800 px-3 py-2 rounded border flex-1 mr-3 break-all select-all">${password}</code>
+                            <div class="flex space-x-2">
+                                <button class="copy-btn btn-hover p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-800" aria-label="Copy password" title="Copy to clipboard">
+                                    <i class="ri-file-copy-line text-xl"></i>
+                                </button>
+                                <button class="star-btn btn-hover p-2 bg-gray-100 dark:bg-gray-600 text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-gray-500" aria-label="Save password and download TXT" title="Save and download as TXT">
+                                    <i class="ri-star-line text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="strength-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${strength.score}" aria-label="Password strength">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs text-gray-600 dark:text-gray-400 flex items-center">
+                                    <i class="ri-shield-check-line mr-1"></i>
+                                    Strength:
+                                </span>
+                                <span class="strength-label text-xs font-medium text-gray-700 dark:text-gray-300">${strength.category}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                <div class="strength-bar h-2 rounded-full ${strength.color}" style="width: ${strength.score}%"></div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Add event listeners
+                    const copyBtn = passwordItem.querySelector('.copy-btn');
+                    const starBtn = passwordItem.querySelector('.star-btn');
+                    
+                    copyBtn.addEventListener('click', () => copyToClipboard(password));
+                    
+                    starBtn.addEventListener('click', () => {
+                        const isStarred = starBtn.classList.contains('text-yellow-500');
+                        
+                        if (isStarred) {
+                            // Remove from saved
+                            const index = savedPasswords.indexOf(password);
+                            if (index > -1) {
+                                savedPasswords.splice(index, 1);
+                            }
+                            starBtn.innerHTML = '<i class="ri-star-line text-xl"></i>';
+                            starBtn.classList.remove('text-yellow-500');
+                            starBtn.classList.add('text-gray-400');
+                            showToast('Password removed from saved list', { type: 'info' });
+                        } else {
+                            // Add to saved and download TXT
+                            if (!savedPasswords.includes(password)) {
+                                savedPasswords.push(password);
+                            }
+                            starBtn.innerHTML = '<i class="ri-star-fill text-xl"></i>';
+                            starBtn.classList.remove('text-gray-400');
+                            starBtn.classList.add('text-yellow-500');
+                            downloadTxtSingle(password);
+                        }
+                        
+                        updateSavedControls();
+                    });
+                    
+                    passwordsList.appendChild(passwordItem);
+                });
+                
+                passwordsContainer.classList.remove('hidden');
+            }
+            
+            // Dark mode functionality
+            function applyDarkMode(isDark) {
+                if (isDark) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+                
+                // Only persist if user has previously consented
+                const hasConsented = localStorage.getItem('theme-consent');
+                if (hasConsented === 'true') {
+                    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                }
+            }
+            
+            // Event Listeners
+            lengthSlider.addEventListener('input', () => {
+                lengthDisplay.textContent = lengthSlider.value;
+                validateInputs();
+            });
+            
+            countInput.addEventListener('input', validateInputs);
+            countInput.addEventListener('change', validateInputs);
+            
+            [uppercaseCheck, lowercaseCheck, digitsCheck, symbolsCheck].forEach(checkbox => {
+                checkbox.addEventListener('change', validateInputs);
+            });
+            
+            generateBtn.addEventListener('click', generatePasswords);
+            
+            downloadAllBtn.addEventListener('click', () => {
+                if (savedPasswords.length > 0) {
+                    downloadTxtBulk([...savedPasswords]);
+                }
+            });
+            
+            clearSavedBtn.addEventListener('click', clearSavedList);
+            
+            themeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.contains('dark');
+                
+                // First time - ask for consent
+                if (!localStorage.getItem('theme-consent')) {
+                    const consent = confirm('Do you want to save your theme preference? This will store a small preference in your browser\'s local storage. No passwords or sensitive data will be stored.');
+                    localStorage.setItem('theme-consent', consent ? 'true' : 'false');
+                    
+                    if (consent) {
+                        showToast('Theme preference will be saved', { type: 'info' });
+                    } else {
+                        showToast('Theme will reset when you reload the page', { type: 'info' });
+                    }
+                }
+                
+                applyDarkMode(!isDark);
+            });
+            
+            // Initialize theme from localStorage if consent given
+            const hasConsented = localStorage.getItem('theme-consent') === 'true';
+            if (hasConsented) {
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme === 'dark') {
+                    applyDarkMode(true);
+                }
+            }
+            
+            // Initial validation
+            validateInputs();
+            
+            // Performance warning for large requests
+            countInput.addEventListener('change', () => {
+                const count = parseInt(countInput.value);
+                const length = parseInt(lengthSlider.value);
+                
+                if (count > 200 && length > 50) {
+                    showToast('Large password generation may slow your browser. Consider reducing count or length.', { type: 'warning' });
+                }
+            });
+            
+            // Keyboard navigation support
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target === generateBtn) {
+                    generatePasswords();
+                }
+            });
+            
+            // Clear memory on page unload (best effort)
+            window.addEventListener('beforeunload', () => {
+                savedPasswords.length = 0;
+            });
+            
+            console.log('Unbreakable Password Generator initialized successfully');
+        });
+    </script>
+</body>
+</html>
