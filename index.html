@@ -26,12 +26,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js" crossorigin="anonymous"></script>
     
     <style>
-        /* Dark mode and animations */
+        /* Dark mode base */
         .dark {
             --tw-bg-opacity: 1;
             background-color: rgb(17 24 39 / var(--tw-bg-opacity));
             color: rgb(243 244 246);
         }
+        /* Toast animations */
         .strength-bar {
             transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;
         }
@@ -80,49 +81,70 @@
         .strength-strong { background-color: #16a34a; }
         .strength-very-strong { background-color: #059669; }
         .strength-super-strong { background-color: #0d9488; }
-        /* Range slider styling */
+
+        /* ===== Range slider styling ===== 
+           We style both WebKit and Firefox so that:
+           - The track is visible (different color in light vs dark).
+           - The thumb is visible and centered vertically.
+        */
         input[type="range"] {
             -webkit-appearance: none;
             appearance: none;
-            background: transparent;
+            width: 100%;
+            margin: 0;
+            background: transparent; /* avoid default background */
             cursor: pointer;
         }
-        input[type="range"]::-webkit-slider-track {
-            background: #d1d5db;
+        /* WebKit track */
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
             height: 8px;
+            background: #d1d5db; /* light mode track */
             border-radius: 4px;
         }
-        .dark input[type="range"]::-webkit-slider-track {
-            background: #374151;
+        .dark input[type="range"]::-webkit-slider-runnable-track {
+            background: #4b5563; /* darker track in dark mode */
         }
+        /* WebKit thumb */
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            height: 20px;
             width: 20px;
+            height: 20px;
             border-radius: 50%;
             background: #3b82f6;
-            cursor: pointer;
             border: 2px solid #ffffff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-top: -6px; /* center the thumb: (track height 8px, thumb 20px) => (8-20)/2 = -6 */
         }
+        /* Firefox track */
         input[type="range"]::-moz-range-track {
-            background: #d1d5db;
+            width: 100%;
             height: 8px;
+            background: #d1d5db;
             border-radius: 4px;
             border: none;
         }
         .dark input[type="range"]::-moz-range-track {
-            background: #374151;
+            background: #4b5563;
         }
+        /* Firefox thumb */
         input[type="range"]::-moz-range-thumb {
-            height: 20px;
             width: 20px;
+            height: 20px;
             border-radius: 50%;
             background: #3b82f6;
-            cursor: pointer;
             border: 2px solid #ffffff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        /* Hide focus outline but keep accessible focus styling if needed */
+        input[type="range"]:focus {
+            outline: none;
+        }
+        /* Optional: add a subtle focus style */
+        input[type="range"]:focus::-webkit-slider-runnable-track {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        input[type="range"]:focus::-moz-range-track {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
         }
     </style>
 </head>
@@ -166,8 +188,8 @@
                 <label for="length-slider" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Password Length: <span id="length-display" class="font-mono text-blue-600 dark:text-blue-400 font-bold">16</span>
                 </label>
-                <input type="range" id="length-slider" min="4" max="100" value="16" step="1" 
-                       class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
+                <!-- Notice: no bg-gray-* class here, since CSS handles the track -->
+                <input type="range" id="length-slider" min="4" max="100" value="16" step="1" class="cursor-pointer">
             </div>
 
             <!-- Count Input -->
@@ -615,9 +637,9 @@
                         
                         if (isStarred) {
                             // Remove from saved
-                            const index = savedPasswords.indexOf(password);
-                            if (index > -1) {
-                                savedPasswords.splice(index, 1);
+                            const idx = savedPasswords.indexOf(password);
+                            if (idx > -1) {
+                                savedPasswords.splice(idx, 1);
                             }
                             starBtn.innerHTML = '<i class="ri-star-line text-xl"></i>';
                             starBtn.classList.remove('text-yellow-500');
