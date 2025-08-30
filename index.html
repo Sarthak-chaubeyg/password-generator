@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Strict, offline-only CSP (no inline, no remote) -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src 'self';
+    style-src 'self';
+    img-src 'self' data:;
+    font-src 'none';
+    connect-src 'none';
+    object-src 'none';
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'none';
+  ">
+
+  <!-- Extra hardening (effective as HTTP headers if served by a server) -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="no-referrer">
+  <!-- Permissions-Policy as META is not standardized; set as HTTP header if hosted -->
+
+  <title>Unbreakable Password Generator (Offline, Auditable)</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="header">
+    <h1 class="title">Unbreakable Password Generator</h1>
+    <div class="badge">Offline · No CDNs · Strict CSP</div>
+  </header>
+
+  <main class="container">
+    <section class="notice">
+      <strong>Security Notice:</strong>
+      This tool runs entirely on your device. No network access, no analytics, no storage of secrets.
+      Use only on a trusted machine and keep generated passwords safe.
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Password Settings</h2>
+
+      <div class="grid">
+        <div class="field">
+          <label for="length">Length</label>
+          <input id="length" type="number" min="4" max="128" value="16" inputmode="numeric" />
+          <small class="hint">4–128</small>
+        </div>
+
+        <div class="field">
+          <label for="count">How many?</label>
+          <input id="count" type="number" min="1" max="200" value="5" inputmode="numeric" />
+          <small class="hint">1–200</small>
+        </div>
+      </div>
+
+      <fieldset class="fieldset">
+        <legend>Character Sets</legend>
+        <label class="check">
+          <input id="uppercase" type="checkbox" checked />
+          Uppercase (A–Z)
+        </label>
+        <label class="check">
+          <input id="lowercase" type="checkbox" checked />
+          Lowercase (a–z)
+        </label>
+        <label class="check">
+          <input id="digits" type="checkbox" checked />
+          Digits (0–9)
+        </label>
+        <label class="check">
+          <input id="symbols" type="checkbox" checked />
+          Symbols (!@#$…)
+        </label>
+        <label class="check">
+          <input id="enforce-classes" type="checkbox" checked />
+          Ensure at least one from each selected set
+        </label>
+      </fieldset>
+
+      <div class="entropy">
+        <div class="entropy-row">
+          <span>Entropy:</span>
+          <strong id="entropy-bits">—</strong>
+          <span class="mono" id="charset-size">(charset size: —)</span>
+        </div>
+        <div class="meter" aria-hidden="true">
+          <div id="entropy-meter" class="meter-bar" style="width:0%"></div>
+        </div>
+        <small id="entropy-note" class="note">Adjust length/sets to reach ≥ 128 bits for master secrets.</small>
+      </div>
+
+      <div id="validation" class="alert hidden" role="alert"></div>
+
+      <button id="generate" class="btn" type="button" aria-live="polite">
+        Generate Passwords
+      </button>
+    </section>
+
+    <section id="results" class="card hidden">
+      <h2 class="card-title">Generated Passwords</h2>
+      <div id="list" class="list"></div>
+
+      <div id="saved-controls" class="toolbar hidden">
+        <button id="download-all" class="btn-secondary" type="button" disabled>Download Saved (TXT)</button>
+        <button id="clear-saved" class="btn-danger" type="button">Clear Saved</button>
+        <span id="saved-count" class="muted">0 saved</span>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
